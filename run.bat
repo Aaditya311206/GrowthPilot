@@ -1,0 +1,13 @@
+@echo off
+echo Starting GrowthPilot Services...
+
+echo Starting AI Engine...
+start cmd /k "cd ai-engine && uvicorn main:app --reload --port 8000"
+
+echo Starting Backend API...
+start cmd /k "cd backend && npm run dev"
+
+echo Starting Frontend...
+start cmd /k "cd frontend && npm run dev"
+
+echo All services started!

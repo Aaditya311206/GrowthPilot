@@ -1,13 +1,195 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Merchant {
+  id                       String             @id @default(uuid())
+  name                     String
+  contribution_margin_rate Float
+  users                    User[]
+  customers                Customer[]
+  orders                   Order[]
+  guardrails               Guardrail[]
+  opportunities            Opportunity[]
+  agentRuns                AgentRun[]
+  auditLogs                AuditLog[]
+}
+
+model User {
+  id            String   @id @default(uuid())
+  merchantId    String
+  email         String   @unique
+  passwordHash  String
+  role          String
+  merchant      Merchant @relation(fields: [merchantId], references: [id])
+}
+
+model Customer {
+  id                   String                 @id @default(uuid())
+  merchantId           String
+  segment              String
+  createdAt            DateTime               @default(now())
+  merchant             Merchant               @relation(fields: [merchantId], references: [id])
+  orders               Order[]
+  experimentAssignments ExperimentAssignment[]
+
+  @@index([merchantId, segment])
+}
+
+model Order {
+  id          String    @id @default(uuid())
+  customerId  String
+  merchantId  String
+  amount      Float
+  status      String
+  createdAt   DateTime  @default(now())
+  customer    Customer  @relation(fields: [customerId], references: [id])
+  merchant    Merchant  @relation(fields: [merchantId], references: [id])
+  payments    Payment[]
+  offers      Offer[]
+
+  @@index([customerId, createdAt])
+}
+
+model Payment {
+  id            String  @id @default(uuid())
+  orderId       String
+  method        String
+  status        String
+  failureReason String?
+  order         Order   @relation(fields: [orderId], references: [id])
+
+  @@index([method, status])
+}
+
+model Offer {
+  id             String @id @default(uuid())
+  orderId        String
+  discountAmount Float
+  offerType      String
+  order          Order  @relation(fields: [orderId], references: [id])
+}
+
+model Opportunity {
+  id                  String       @id @default(uuid())
+  merchantId          String
+  type                String
+  evidenceJson        Json
+  expectedImpactScore Float
+  status              String       @default("active")
+  merchant            Merchant     @relation(fields: [merchantId], references: [id])
+  hypotheses          Hypothesis[]
+}
+
+model Hypothesis {
+  id            String       @id @default(uuid())
+  opportunityId String
+  text          String
+  evidenceJson  Json
+  opportunity   Opportunity  @relation(fields: [opportunityId], references: [id])
+  experiments   Experiment[]
+}
+
+model Experiment {
+  id                 String                 @id @default(uuid())
+  hypothesisId       String
+  status             String                 @default("draft") // draft, approved, running, analyzed, rejected
+  designJson         Json?
+  guardrailCheckJson Json?
+  approvedAt         DateTime?
+  hypothesis         Hypothesis             @relation(fields: [hypothesisId], references: [id])
+  assignments        ExperimentAssignment[]
+  metrics            ExperimentMetric[]
+  result             ExperimentResult?
+  memories           ExperimentMemory[]
+}
+
+model ExperimentAssignment {
+  id           String     @id @default(uuid())
+  experimentId String
+  customerId   String
+  arm          String     // control, treatment
+  experiment   Experiment @relation(fields: [experimentId], references: [id])
+  customer     Customer   @relation(fields: [customerId], references: [id])
+
+  @@index([experimentId])
+}
+
+model ExperimentMetric {
+  id           String     @id @default(uuid())
+  experimentId String
+  arm          String
+  metricName   String
+  value        Float
+  experiment   Experiment @relation(fields: [experimentId], references: [id])
+}
+
+model ExperimentResult {
+  id                 String     @id @default(uuid())
+  experimentId       String     @unique
+  lift               Float
+  pValue             Float
+  confidenceInterval String
+  incrementalRevenue Float
+  incrementalProfit  Float
+  explanationText    String
+  experiment         Experiment @relation(fields: [experimentId], references: [id])
+}
+
+model ExperimentMemory {
+  id                String     @id @default(uuid())
+  experimentId      String
+  segment           String
+  lever             String
+  outcomeLabel      String     // win, loss, inconclusive
+  incrementalProfit Float
+  createdAt         DateTime   @default(now())
+  experiment        Experiment @relation(fields: [experimentId], references: [id])
+}
+
+model Guardrail {
+  id         String   @id @default(uuid())
+  merchantId String
+  ruleType   String
+  valueJson  Json
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+}
+
+model AgentRun {
+  id         String        @id @default(uuid())
+  merchantId String
+  startedAt  DateTime      @default(now())
+  endedAt    DateTime?
+  finalState String?
+  merchant   Merchant      @relation(fields: [merchantId], references: [id])
+  actions    AgentAction[]
+}
+
+model AgentAction {
+  id          String   @id @default(uuid())
+  agentRunId  String
+  state       String
+  inputJson   Json?
+  outputJson  Json?
+  timestamp   DateTime @default(now())
+  agentRun    AgentRun @relation(fields: [agentRunId], references: [id])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  merchantId String
+  actor      String
+  action     String
+  entity     String
+  entityId   String
+  createdAt  DateTime @default(now())
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
 }

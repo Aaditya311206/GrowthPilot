@@ -4,4 +4,5 @@ pandas
 statsmodels
 python-dotenv
 scipy
+scikit-learn
 pydantic

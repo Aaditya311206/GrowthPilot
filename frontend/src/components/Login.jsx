@@ -3,8 +3,10 @@ import { PlaneTakeoff, Loader2 } from 'lucide-react';
 import api from '../api';
 
 export default function Login({ onLogin }) {
+  const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [merchantName, setMerchantName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -12,15 +14,22 @@ export default function Login({ onLogin }) {
     e.preventDefault();
     setLoading(true);
     setError('');
+    
     try {
-      const res = await api.post('/auth/login', { email, password });
+      const endpoint = isRegistering ? '/auth/register' : '/auth/login';
+      const payload = isRegistering 
+        ? { email, password, merchantName } 
+        : { email, password };
+
+      const res = await api.post(endpoint, payload);
+      
       if (res.data.token) {
         localStorage.setItem('token', res.data.token);
         localStorage.setItem('user', JSON.stringify(res.data.user));
         onLogin(res.data.token);
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Invalid email or password.');
+      setError(err.response?.data?.error || 'Authentication failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -37,22 +46,35 @@ export default function Login({ onLogin }) {
             GrowthPilot
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Sign in to your merchant dashboard
+            {isRegistering ? 'Create your merchant account' : 'Sign in to your merchant dashboard'}
           </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-50 text-red-700 p-3 rounded-md text-sm text-center font-medium">
+            <div className="bg-red-50 text-red-700 p-3 rounded-md text-sm text-center font-medium border border-red-100">
               {error}
             </div>
           )}
           <div className="rounded-md shadow-sm -space-y-px">
+            {isRegistering && (
+              <div>
+                <label className="sr-only">Merchant Name</label>
+                <input
+                  type="text"
+                  required
+                  className="appearance-none rounded-none relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-purple-500 focus:border-purple-500 focus:z-10 sm:text-sm"
+                  placeholder="Merchant Name (e.g. Acme Corp)"
+                  value={merchantName}
+                  onChange={(e) => setMerchantName(e.target.value)}
+                />
+              </div>
+            )}
             <div>
               <label className="sr-only">Email address</label>
               <input
                 type="email"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-purple-500 focus:border-purple-500 focus:z-10 sm:text-sm"
+                className={`appearance-none rounded-none relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 ${!isRegistering ? 'rounded-t-md' : ''} focus:outline-none focus:ring-purple-500 focus:border-purple-500 focus:z-10 sm:text-sm`}
                 placeholder="Email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -75,9 +97,22 @@ export default function Login({ onLogin }) {
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-70 transition-colors"
+              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-70 transition-colors shadow-sm"
             >
-              {loading ? <Loader2 className="animate-spin h-5 w-5" /> : 'Sign in'}
+              {loading ? <Loader2 className="animate-spin h-5 w-5" /> : (isRegistering ? 'Sign up' : 'Sign in')}
+            </button>
+          </div>
+          
+          <div className="text-center mt-4">
+            <button
+              type="button"
+              onClick={() => {
+                setIsRegistering(!isRegistering);
+                setError('');
+              }}
+              className="text-sm font-medium text-purple-600 hover:text-purple-500 focus:outline-none"
+            >
+              {isRegistering ? 'Already have an account? Sign in' : "Don't have an account? Register"}
             </button>
           </div>
         </form>

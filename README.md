@@ -179,7 +179,7 @@ The engine evaluates these equations for every targeted customer, selecting the 
 
 | Layer          | Technology             |
 | -------------- | ---------------------- |
-| Frontend       | HTML/CSS               |
+| Frontend       | React, Vite, Tailwind CSS, Recharts |
 | Backend        | Node.js, Express       |
 | Database       | PostgreSQL / Neon      |
 | ML             | Python, Scikit-Learn   |
@@ -356,14 +356,14 @@ ode_modules are Git-ignored.
 2. Start Node.js Backend API (
 pm run dev)
 3. Start Python AI Engine (uvicorn main:app)
-4. Trigger the E2E Demo script (
-ode backend/e2e_demo.js)
-5. Observe the automated extraction of RFM behaviors.
-6. Verify the probabilistic predictions of the ML model.
-7. Observe the optimization layer ranking interventions by profit.
-8. Validate the final generated recommendation output trace.
-
----
+4. Start Frontend (
+pm run dev in rontend/)
+5. **Login** to the web application.
+6. **Dashboard**: Navigate to the GrowthPilot agent interface.
+7. **Set Goal + Budget**: Define your intervention constraints.
+8. **Run GrowthPilot**: Execute the deterministic pipeline.
+9. **View Execution Trace**: Expand states to view statistical bounds and optimizations.
+10. **View Recommendations**: Inspect the resulting customer-level metrics and expected profit.
 
 ## 22. DEVELOPMENT NOTES
 

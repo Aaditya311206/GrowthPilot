@@ -24,7 +24,6 @@ class Experiment(Base):
     
     assignments = relationship("ExperimentAssignment", back_populates="experiment")
     result = relationship("ExperimentResult", back_populates="experiment", uselist=False)
-    memories = relationship("ExperimentMemory", back_populates="experiment")
 
 class ExperimentAssignment(Base):
     __tablename__ = "ExperimentAssignment"
@@ -48,18 +47,6 @@ class Order(Base):
     createdAt = Column(DateTime, default=datetime.utcnow)
 
     customer = relationship("Customer", back_populates="orders")
-    payments = relationship("Payment", back_populates="order")
-
-class Payment(Base):
-    __tablename__ = "Payment"
-
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    orderId = Column(String, ForeignKey("Order.id"), nullable=False)
-    method = Column(String, nullable=False)
-    status = Column(String, nullable=False)
-    failureReason = Column(String, nullable=True)
-
-    order = relationship("Order", back_populates="payments")
 
 class ExperimentResult(Base):
     __tablename__ = "ExperimentResult"
@@ -74,41 +61,3 @@ class ExperimentResult(Base):
     explanationText = Column(String, nullable=False)
 
     experiment = relationship("Experiment", back_populates="result")
-
-class ExperimentMemory(Base):
-    __tablename__ = "ExperimentMemory"
-    
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    experimentId = Column(String, ForeignKey("Experiment.id"), nullable=False)
-    segment = Column(String, nullable=False)
-    lever = Column(String, nullable=False)
-    outcomeLabel = Column(String, nullable=False)
-    incrementalProfit = Column(Float, nullable=False)
-    createdAt = Column(DateTime, default=datetime.utcnow)
-    
-    experiment = relationship("Experiment", back_populates="memories")
-
-class AgentRun(Base):
-    __tablename__ = "AgentRun"
-
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    merchantId = Column(String, nullable=False)
-    startedAt = Column(DateTime, default=datetime.utcnow)
-    endedAt = Column(DateTime, nullable=True)
-    finalState = Column(String, nullable=True)
-
-    actions = relationship("AgentAction", back_populates="agentRun")
-
-from sqlalchemy import JSON
-
-class AgentAction(Base):
-    __tablename__ = "AgentAction"
-
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    agentRunId = Column(String, ForeignKey("AgentRun.id"), nullable=False)
-    state = Column(String, nullable=False)
-    inputJson = Column(JSON, nullable=True)
-    outputJson = Column(JSON, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
-
-    agentRun = relationship("AgentRun", back_populates="actions")

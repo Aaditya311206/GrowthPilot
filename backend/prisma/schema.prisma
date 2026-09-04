@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,50 +8,50 @@ datasource db {
 }
 
 model Merchant {
-  id                       String             @id @default(uuid())
+  id                       String        @id @default(uuid())
   name                     String
   contribution_margin_rate Float
-  users                    User[]
-  customers                Customer[]
-  orders                   Order[]
-  guardrails               Guardrail[]
-  opportunities            Opportunity[]
   agentRuns                AgentRun[]
   auditLogs                AuditLog[]
+  customers                Customer[]
+  guardrails               Guardrail[]
+  opportunities            Opportunity[]
+  orders                   Order[]
+  users                    User[]
 }
 
 model User {
-  id            String   @id @default(uuid())
-  merchantId    String
-  email         String   @unique
-  passwordHash  String
-  role          String
-  merchant      Merchant @relation(fields: [merchantId], references: [id])
+  id           String   @id @default(uuid())
+  merchantId   String
+  email        String   @unique
+  passwordHash String
+  role         String
+  merchant     Merchant @relation(fields: [merchantId], references: [id])
 }
 
 model Customer {
-  id                   String                 @id @default(uuid())
-  merchantId           String
-  segment              String
-  createdAt            DateTime               @default(now())
-  merchant             Merchant               @relation(fields: [merchantId], references: [id])
-  orders               Order[]
+  id                    String                 @id @default(uuid())
+  merchantId            String
+  segment               String
+  createdAt             DateTime               @default(now())
+  merchant              Merchant               @relation(fields: [merchantId], references: [id])
   experimentAssignments ExperimentAssignment[]
+  orders                Order[]
 
   @@index([merchantId, segment])
 }
 
 model Order {
-  id          String    @id @default(uuid())
-  customerId  String
-  merchantId  String
-  amount      Float
-  status      String
-  createdAt   DateTime  @default(now())
-  customer    Customer  @relation(fields: [customerId], references: [id])
-  merchant    Merchant  @relation(fields: [merchantId], references: [id])
-  payments    Payment[]
-  offers      Offer[]
+  id         String    @id @default(uuid())
+  customerId String
+  merchantId String
+  amount     Float
+  status     String
+  createdAt  DateTime  @default(now())
+  offers     Offer[]
+  customer   Customer  @relation(fields: [customerId], references: [id])
+  merchant   Merchant  @relation(fields: [merchantId], references: [id])
+  payments   Payment[]
 
   @@index([customerId, createdAt])
 }
@@ -85,8 +82,8 @@ model Opportunity {
   evidenceJson        Json
   expectedImpactScore Float
   status              String       @default("active")
-  merchant            Merchant     @relation(fields: [merchantId], references: [id])
   hypotheses          Hypothesis[]
+  merchant            Merchant     @relation(fields: [merchantId], references: [id])
 }
 
 model Hypothesis {
@@ -94,31 +91,31 @@ model Hypothesis {
   opportunityId String
   text          String
   evidenceJson  Json
-  opportunity   Opportunity  @relation(fields: [opportunityId], references: [id])
   experiments   Experiment[]
+  opportunity   Opportunity  @relation(fields: [opportunityId], references: [id])
 }
 
 model Experiment {
   id                 String                 @id @default(uuid())
   hypothesisId       String
-  status             String                 @default("draft") // draft, approved, running, analyzed, rejected
+  status             String                 @default("draft")
   designJson         Json?
   guardrailCheckJson Json?
   approvedAt         DateTime?
   hypothesis         Hypothesis             @relation(fields: [hypothesisId], references: [id])
   assignments        ExperimentAssignment[]
+  memories           ExperimentMemory[]
   metrics            ExperimentMetric[]
   result             ExperimentResult?
-  memories           ExperimentMemory[]
 }
 
 model ExperimentAssignment {
   id           String     @id @default(uuid())
   experimentId String
   customerId   String
-  arm          String     // control, treatment
-  experiment   Experiment @relation(fields: [experimentId], references: [id])
+  arm          String
   customer     Customer   @relation(fields: [customerId], references: [id])
+  experiment   Experiment @relation(fields: [experimentId], references: [id])
 
   @@index([experimentId])
 }
@@ -149,7 +146,7 @@ model ExperimentMemory {
   experimentId      String
   segment           String
   lever             String
-  outcomeLabel      String     // win, loss, inconclusive
+  outcomeLabel      String
   incrementalProfit Float
   createdAt         DateTime   @default(now())
   experiment        Experiment @relation(fields: [experimentId], references: [id])
@@ -169,18 +166,18 @@ model AgentRun {
   startedAt  DateTime      @default(now())
   endedAt    DateTime?
   finalState String?
-  merchant   Merchant      @relation(fields: [merchantId], references: [id])
   actions    AgentAction[]
+  merchant   Merchant      @relation(fields: [merchantId], references: [id])
 }
 
 model AgentAction {
-  id          String   @id @default(uuid())
-  agentRunId  String
-  state       String
-  inputJson   Json?
-  outputJson  Json?
-  timestamp   DateTime @default(now())
-  agentRun    AgentRun @relation(fields: [agentRunId], references: [id])
+  id         String   @id @default(uuid())
+  agentRunId String
+  state      String
+  inputJson  Json?
+  outputJson Json?
+  timestamp  DateTime @default(now())
+  agentRun   AgentRun @relation(fields: [agentRunId], references: [id])
 }
 
 model AuditLog {

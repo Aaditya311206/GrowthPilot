@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from ..database import get_db
-from ..models import Experiment, ExperimentAssignment, Order, ExperimentResult
+from ..models import Experiment, ExperimentAssignment, Order, ExperimentResult, Customer
 from ..services.assignment import get_hash_assignment
 from ..services.stats import calculate_significance
 from ..services.profit import calculate_contribution_profit
@@ -15,9 +15,11 @@ router = APIRouter(prefix="/experiments", tags=["Experiments"])
 class AssignRequest(BaseModel):
     customer_id: str
     experiment_id: str
+    merchant_id: Optional[str] = None
     traffic_split: int = 50
 
 class EvaluateRequest(BaseModel):
+    merchant_id: Optional[str] = None
     offer_cost_per_conversion: float
     margin_percentage: float = 0.30
     alpha: float = 0.05
@@ -27,6 +29,11 @@ def assign_customer(req: AssignRequest, db: Session = Depends(get_db)):
     """
     Randomized A/B assignment via MD5 hash with DB persistence.
     """
+    if req.merchant_id:
+        cust = db.query(Customer).filter(Customer.id == req.customer_id).first()
+        if cust and cust.merchantId != req.merchant_id:
+            raise HTTPException(status_code=403, detail="Merchant unauthorized for this customer")
+            
     arm = get_hash_assignment(db, req.customer_id, req.experiment_id, req.traffic_split)
     return {
         "customer_id": req.customer_id,
@@ -48,6 +55,11 @@ def evaluate_experiment(experiment_id: str, req: EvaluateRequest, db: Session = 
     assignments = db.query(ExperimentAssignment).filter(ExperimentAssignment.experimentId == experiment_id).all()
     if not assignments:
         raise HTTPException(status_code=400, detail="No assignments found for this experiment")
+
+    if req.merchant_id:
+        first_cust = db.query(Customer).filter(Customer.id == assignments[0].customerId).first()
+        if first_cust and first_cust.merchantId != req.merchant_id:
+            raise HTTPException(status_code=403, detail="Merchant unauthorized for this experiment")
 
     treat_customers = [a.customerId for a in assignments if a.arm == "treatment"]
     ctrl_customers = [a.customerId for a in assignments if a.arm == "control"]
@@ -75,8 +87,8 @@ def evaluate_experiment(experiment_id: str, req: EvaluateRequest, db: Session = 
     treat_rev = sum([o.amount for o in treat_orders])
     ctrl_rev = sum([o.amount for o in ctrl_orders])
 
-    # 4. Statistical Tests
-    stats_res = calculate_significance(
+    # 4. Statistical Tests using two-sample difference CI
+    lift_ci_res = calculate_lift_ci(
         count_treat=treat_conv,
         count_ctrl=ctrl_conv,
         nobs_treat=nobs_treat,
@@ -102,7 +114,7 @@ def evaluate_experiment(experiment_id: str, req: EvaluateRequest, db: Session = 
 
     explanation = (
         f"Treat Conv: {treat_rate:.2%} | Ctrl Conv: {ctrl_rate:.2%} | "
-        f"Significant: {stats_res['is_significant']} | Profitable: {profit_res['is_profitable']}"
+        f"Significant Positive: {lift_ci_res['is_significant_positive']} | Profitable: {profit_res['is_profitable']}"
     )
 
     # 6. Save or update ExperimentResult
@@ -115,8 +127,8 @@ def evaluate_experiment(experiment_id: str, req: EvaluateRequest, db: Session = 
         db.add(result)
         
     result.lift = lift
-    result.pValue = stats_res["p_value"]
-    result.confidenceInterval = f"T:{stats_res['ci_treat']} C:{stats_res['ci_ctrl']}"
+    result.pValue = lift_ci_res["p_value"]
+    result.confidenceInterval = f"[{lift_ci_res['ci_lower']:.4f}, {lift_ci_res['ci_upper']:.4f}]"
     result.incrementalRevenue = profit_res["incremental_revenue"]
     result.incrementalProfit = profit_res["net_contribution_profit"]
     result.explanationText = explanation
@@ -134,9 +146,9 @@ def evaluate_experiment(experiment_id: str, req: EvaluateRequest, db: Session = 
             "treatment_conversions": treat_conv,
             "control_conversions": ctrl_conv,
             "treatment_revenue": treat_rev,
-            "control_revenue": ctrl_rev
+            "control_revenue": ctrl_ctrl if 'ctrl_ctrl' in locals() else ctrl_rev
         },
-        "statistics": stats_res,
+        "statistics": lift_ci_res,
         "profitability": profit_res,
         "summary": explanation
     }

@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     database_url: str = ""
-    ai_engine_secret: str = "growthpilot-internal-secret-2026"
+    ai_engine_secret: str = ""
 
 
     class Config:

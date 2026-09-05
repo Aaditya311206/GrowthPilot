@@ -12,7 +12,7 @@ router.post('/run', async (req, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Internal-Secret': process.env.AI_ENGINE_SECRET || 'growthpilot-internal-secret-2026'
+        'X-Internal-Secret': process.env.AI_ENGINE_SECRET || ''
       },
       body: JSON.stringify({
         merchant_id: req.user.merchantId,

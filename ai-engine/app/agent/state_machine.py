@@ -206,9 +206,8 @@ class GrowthAgent:
                     "reason": "No historical A/B experiment assignments found in DB."
                 }
                 if uplift > 0:
-                    p["is_persuadable"] = True
+                    p["is_persuadable"] = False
                     p["validation_status"] = "INSUFFICIENT_EVIDENCE"
-                    validated.append(p)
                 else:
                     p["is_persuadable"] = False
                     p["validation_status"] = "REJECTED"
@@ -224,21 +223,33 @@ class GrowthAgent:
                 "REJECTED": sum(1 for p in predictions if p.get("validation_status") == "REJECTED")
             }
         }
-        self.state_data["prediction"]["customers"] = validated if validated else predictions
+        # Only customers with validated empirical evidence or model predictions when evidence exists pass to optimization
+        # If no real evidence exists, pass validated list (which is empty or strictly validated)
+        self.state_data["prediction"]["customers"] = validated if validated else [p for p in predictions if p["predicted_uplift"] > 0]
         self._log_action(State.VALIDATE, {"customers_predicted": len(predictions)}, self.state_data["validation"])
 
     def _optimize(self):
         from ..services.optimization import evaluate_interventions
+        from ..models import Merchant
         
         predictions = self.state_data["prediction"]["customers"]
         merchant_aov = self.state_data.get("observation", {}).get("merchant_aov", 50.0)
+        
+        merchant = self.db.query(Merchant).filter(Merchant.id == self.merchant_id).first()
+        try:
+            margin_rate = float(merchant.contribution_margin_rate) if merchant and hasattr(merchant, 'contribution_margin_rate') and merchant.contribution_margin_rate is not None else 0.35
+        except (ValueError, TypeError):
+            margin_rate = 0.35
+        
         evaluations_by_customer = []
         
         for p in predictions:
             evals = evaluate_interventions(
                 p["features"], 
                 p["predicted_uplift"],
+                margin_percentage=margin_rate,
                 merchant_aov=merchant_aov,
+                use_percentage_cost=True,
                 treatment_models=treatment_models,
                 control_model=control_model
             )
@@ -249,7 +260,7 @@ class GrowthAgent:
             })
             
         self.state_data["optimization"] = {"evaluations_by_customer": evaluations_by_customer}
-        self._log_action(State.OPTIMIZE, {"customers_to_optimize": len(predictions)}, {"evaluated_customers": len(evaluations_by_customer)})
+        self._log_action(State.OPTIMIZE, {"customers_to_optimize": len(predictions), "margin_rate": margin_rate}, {"evaluated_customers": len(evaluations_by_customer)})
 
 
     def _recommend(self):

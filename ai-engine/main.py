@@ -20,7 +20,7 @@ async def verify_internal_secret(request: Request, call_next):
         return await call_next(request)
         
     secret = request.headers.get("X-Internal-Secret")
-    expected_secret = getattr(settings, "ai_engine_secret", "growthpilot-internal-secret-2026")
+    expected_secret = getattr(settings, "ai_engine_secret", None)
     
     if expected_secret and secret != expected_secret:
         return JSONResponse(

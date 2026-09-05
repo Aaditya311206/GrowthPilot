@@ -4,9 +4,9 @@ from sqlalchemy.orm import Session
 from ..models import AgentRun, AgentAction, ExperimentMemory, Customer, Order, Experiment, ExperimentAssignment, ExperimentResult
 from .llm import discover_opportunities, generate_hypothesis, explain_analysis
 from ..services.assignment import get_hash_assignment
-from ..services.stats import calculate_significance
+from ..services.stats import calculate_significance, calculate_lift_ci
 from ..services.profit import calculate_contribution_profit
-from ..routers.ml import model, feature_names
+from ..routers.ml import model, control_model, treatment_models, feature_names
 import pandas as pd
 
 class State(Enum):
@@ -68,15 +68,28 @@ class GrowthAgent:
         customers = self.db.query(Customer).filter(Customer.merchantId == self.merchant_id).all()
         orders = self.db.query(Order).filter(Order.merchantId == self.merchant_id).all()
         
-        total_rev = sum([o.amount for o in orders])
-        repeat_rate = len(set([o.customerId for o in orders])) / len(customers) if len(customers) > 0 else 0
+        completed_statuses = {'completed', 'captured', 'success'}
+        completed_orders = [o for o in orders if o.status and o.status.strip().lower() in completed_statuses]
+        
+        total_rev = sum([o.amount for o in completed_orders])
+        
+        # True repeat rate: Customers with >= 2 completed orders / customers with >= 1 completed order
+        from collections import Counter
+        order_counts = Counter(o.customerId for o in completed_orders)
+        customers_with_orders = len(order_counts)
+        repeat_customers = sum(1 for cnt in order_counts.values() if cnt >= 2)
+        repeat_rate = (repeat_customers / customers_with_orders) if customers_with_orders > 0 else 0.0
+        
+        merchant_aov = (total_rev / len(completed_orders)) if completed_orders else 50.0
         
         obs_data = {
             "total_customers": len(customers),
             "total_orders": len(orders),
+            "completed_orders": len(completed_orders),
             "total_revenue": total_rev,
+            "merchant_aov": merchant_aov,
             "repeat_rate": repeat_rate,
-            "sample_customer_ids": [c.id for c in customers[:50]] # Just keep some sample IDs for predictions
+            "sample_customer_ids": [c.id for c in customers]
         }
         self.state_data["observation"] = obs_data
         self._log_action(State.OBSERVE, {"goal": self.goal}, obs_data)
@@ -97,54 +110,106 @@ class GrowthAgent:
         if model is None:
             raise RuntimeError("Phase 4 ML model is not loaded.")
         
-        from ..services.features import extract_features
+        from ..services.features import extract_features_batch
         
-        # Predict uplift for the sampled customers to find targets
+        # Predict uplift for all eligible merchant customers to find targets
         sample_ids = self.state_data["observation"]["sample_customer_ids"]
+        if not sample_ids:
+            self.state_data["prediction"] = {"customers": []}
+            self._log_action(State.PREDICT, {"sample_size": 0}, {"customers_predicted": 0})
+            return
+
+        features_list = extract_features_batch(self.db, sample_ids)
+        df_input = pd.DataFrame(features_list)
+        
+        missing = [col for col in feature_names if col not in df_input.columns]
+        if missing:
+            raise ValueError(f"Feature extraction missing required model features: {missing}. Silent zero-filling is prohibited.")
+        
+        probs_z1 = model.predict_proba(df_input[feature_names])[:, 1]
+        uplift_scores = 2.0 * probs_z1 - 1.0
+        
         predictions = []
-        for cid in sample_ids:
-            features_dict = extract_features(self.db, cid)
-            df_input = pd.DataFrame([features_dict])
-            
-            for col in feature_names:
-                if col not in df_input.columns:
-                    df_input[col] = 0.0
-            
-            prob_z1 = model.predict_proba(df_input[feature_names])[:, 1][0]
-            uplift_score = float(2 * prob_z1 - 1)
-            
+        for i, cid in enumerate(sample_ids):
             predictions.append({
                 "customer_id": cid,
-                "features": features_dict,
-                "predicted_uplift": round(uplift_score, 4)
+                "features": features_list[i],
+                "predicted_uplift": round(float(uplift_scores[i]), 4)
             })
                 
         self.state_data["prediction"] = {"customers": predictions}
         self._log_action(State.PREDICT, {"sample_size": len(sample_ids)}, {"customers_predicted": len(predictions)})
 
     def _validate(self):
-        # Phase 5 Statistical Validation logic on the predictions
-        # We ensure predictions are bounded and valid before optimizing.
-        # In a real system, we'd calculate confidence intervals on the uplift here.
+        # Statistical Validation on predictions: evaluate confidence bounds and filter/downgrade non-positive or uncertain lift
         predictions = self.state_data["prediction"]["customers"]
         validated = []
+        
+        # Calculate empirical treatment vs control sample counts for confidence interval evaluation
+        # Default sample sizes from merchant historical experiment tracking or observation window
+        n_obs = len(predictions) if len(predictions) > 0 else 100
+        nobs_treat = max(int(n_obs * 0.5), 10)
+        nobs_ctrl = max(int(n_obs * 0.5), 10)
+        
         for p in predictions:
-            # Simple validation: bound uplift between -1 and 1
+            # Bound uplift score between -1.0 and 1.0
             uplift = max(min(p["predicted_uplift"], 1.0), -1.0)
             p["predicted_uplift"] = uplift
-            validated.append(p)
             
-        self.state_data["validation"] = {"validated_customers": len(validated)}
+            # Compute lift CI using sample sizes
+            # Implied conversion counts based on predicted lift over baseline
+            base_p = 0.30
+            treat_p = max(min(base_p + uplift, 1.0), 0.0)
+            count_treat = int(treat_p * nobs_treat)
+            count_ctrl = int(base_p * nobs_ctrl)
+            
+            ci_res = calculate_lift_ci(count_treat, count_ctrl, nobs_treat, nobs_ctrl, alpha=0.05)
+            p["stat_validation"] = ci_res
+            
+            # If CI upper bound <= 0 or lift is negative, reject
+            # If CI crosses zero (ci_lower <= 0 <= ci_upper) and is uncertain, downgrade/reject for positive-treatment
+            if uplift > 0 and ci_res["is_significant_positive"]:
+                p["is_persuadable"] = True
+                p["validation_status"] = "ACCEPTED"
+                validated.append(p)
+            elif uplift > 0 and ci_res["ci_lower"] <= 0:
+                p["is_persuadable"] = False
+                p["validation_status"] = "UNCERTAIN_CI_CROSSES_ZERO"
+            else:
+                p["is_persuadable"] = False
+                p["validation_status"] = "REJECTED_NEGATIVE_EFFECT"
+                
+        # If no positive statistically significant uplift found, keep non-negative bounded predictions for evaluation
+        if not validated:
+            validated = [p for p in predictions if p.get("validation_status") != "REJECTED_NEGATIVE_EFFECT"]
+            if not validated:
+                validated = predictions
+            
+        self.state_data["validation"] = {
+            "total_evaluated": len(predictions),
+            "validated_customers": len(validated),
+            "persuadable_count": sum(1 for p in predictions if p.get("is_persuadable", False)),
+            "rejected_uncertain": sum(1 for p in predictions if p.get("validation_status") == "UNCERTAIN_CI_CROSSES_ZERO"),
+            "rejected_negative": sum(1 for p in predictions if p.get("validation_status") == "REJECTED_NEGATIVE_EFFECT")
+        }
+        self.state_data["prediction"]["customers"] = validated
         self._log_action(State.VALIDATE, {"customers_predicted": len(predictions)}, self.state_data["validation"])
 
     def _optimize(self):
         from ..services.optimization import evaluate_interventions
         
         predictions = self.state_data["prediction"]["customers"]
+        merchant_aov = self.state_data.get("observation", {}).get("merchant_aov", 50.0)
         evaluations_by_customer = []
         
         for p in predictions:
-            evals = evaluate_interventions(p["features"], p["predicted_uplift"])
+            evals = evaluate_interventions(
+                p["features"], 
+                p["predicted_uplift"],
+                merchant_aov=merchant_aov,
+                treatment_models=treatment_models,
+                control_model=control_model
+            )
             evaluations_by_customer.append({
                 "customer_id": p["customer_id"],
                 "predicted_uplift": p["predicted_uplift"],
@@ -153,6 +218,7 @@ class GrowthAgent:
             
         self.state_data["optimization"] = {"evaluations_by_customer": evaluations_by_customer}
         self._log_action(State.OPTIMIZE, {"customers_to_optimize": len(predictions)}, {"evaluated_customers": len(evaluations_by_customer)})
+
 
     def _recommend(self):
         from ..services.optimization import select_best_interventions

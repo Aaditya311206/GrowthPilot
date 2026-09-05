@@ -3,6 +3,8 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     database_url: str = ""
+    ai_engine_secret: str = "growthpilot-internal-secret-2026"
+
 
     class Config:
         env_file = os.path.join(os.path.dirname(__file__), '../../backend/.env')

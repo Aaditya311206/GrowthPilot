@@ -51,6 +51,19 @@ def evaluate_uplift(df_results):
     else:
         print("WARNING: Top decile lift is non-positive. Check synthetic feature distributions.")
 
+    # Thesis Verification: Check Segment Distribution in High-Uplift deciles
+    print("\n--- Thesis Verification: Segment Breakdown in Top Decile (Top 10%) ---")
+    top_segments = top_group["segment"].value_counts(normalize=True)
+    for seg, pct in top_segments.items():
+        print(f"   {seg}: {pct:.2%}")
+
+    student_pct = top_segments.get("Student", 0.0)
+    print(f"\nPersuadable Segment (Student) Share in Top Decile: {student_pct:.2%}")
+    if student_pct > 0.70:
+        print("THESIS VALIDATED: Persuadable customers (Students) dominate the top uplift decile!")
+    else:
+        print("WARNING: Persuadable customers do not dominate top decile. Check feature weights.")
+
 if __name__ == "__main__":
     df_results = train_uplift_model()
-    evaluate_uplift(df_results)
+    evaluate_uplift(df_results)

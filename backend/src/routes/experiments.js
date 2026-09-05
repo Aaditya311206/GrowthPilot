@@ -4,8 +4,14 @@ import { prisma } from '../utils/prisma.js';
 const router = Router();
 
 router.get('/', async (req, res) => {
+  const merchantId = req.user.merchantId;
   try {
     const experiments = await prisma.experiment.findMany({
+      where: {
+        hypothesis: {
+          opportunity: { merchantId }
+        }
+      },
       include: { hypothesis: true }
     });
     res.json(experiments);
@@ -16,7 +22,18 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   const { hypothesisId } = req.body;
+  const merchantId = req.user.merchantId;
   try {
+    const hypothesis = await prisma.hypothesis.findFirst({
+      where: {
+        id: hypothesisId,
+        opportunity: { merchantId }
+      }
+    });
+    if (!hypothesis) {
+      return res.status(403).json({ error: 'Access denied: hypothesis not owned by merchant' });
+    }
+
     const experiment = await prisma.experiment.create({
       data: {
         hypothesisId,
@@ -32,12 +49,18 @@ router.post('/', async (req, res) => {
 });
 
 router.get('/:id', async (req, res) => {
+  const merchantId = req.user.merchantId;
   try {
-    const experiment = await prisma.experiment.findUnique({
-      where: { id: req.params.id },
+    const experiment = await prisma.experiment.findFirst({
+      where: { 
+        id: req.params.id,
+        hypothesis: {
+          opportunity: { merchantId }
+        }
+      },
       include: { hypothesis: true, result: true }
     });
-    if (!experiment) return res.status(404).json({ error: 'Not found' });
+    if (!experiment) return res.status(404).json({ error: 'Experiment not found or unauthorized' });
     res.json(experiment);
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
@@ -45,7 +68,18 @@ router.get('/:id', async (req, res) => {
 });
 
 router.patch('/:id/approve', async (req, res) => {
+  const merchantId = req.user.merchantId;
   try {
+    const existing = await prisma.experiment.findFirst({
+      where: {
+        id: req.params.id,
+        hypothesis: {
+          opportunity: { merchantId }
+        }
+      }
+    });
+    if (!existing) return res.status(404).json({ error: 'Experiment not found or unauthorized' });
+
     const experiment = await prisma.experiment.update({
       where: { id: req.params.id },
       data: { status: 'approved', approvedAt: new Date() }
@@ -66,7 +100,18 @@ router.patch('/:id/approve', async (req, res) => {
 });
 
 router.patch('/:id/reject', async (req, res) => {
+  const merchantId = req.user.merchantId;
   try {
+    const existing = await prisma.experiment.findFirst({
+      where: {
+        id: req.params.id,
+        hypothesis: {
+          opportunity: { merchantId }
+        }
+      }
+    });
+    if (!existing) return res.status(404).json({ error: 'Experiment not found or unauthorized' });
+
     const experiment = await prisma.experiment.update({
       where: { id: req.params.id },
       data: { status: 'rejected' }
@@ -87,7 +132,18 @@ router.patch('/:id/reject', async (req, res) => {
 });
 
 router.get('/:id/results', async (req, res) => {
+  const merchantId = req.user.merchantId;
   try {
+    const existing = await prisma.experiment.findFirst({
+      where: {
+        id: req.params.id,
+        hypothesis: {
+          opportunity: { merchantId }
+        }
+      }
+    });
+    if (!existing) return res.status(404).json({ error: 'Experiment not found or unauthorized' });
+
     const result = await prisma.experimentResult.findUnique({
       where: { experimentId: req.params.id }
     });
@@ -99,3 +155,4 @@ router.get('/:id/results', async (req, res) => {
 });
 
 export default router;
+

@@ -1,68 +1,117 @@
-﻿@import "tailwindcss";
+@import "tailwindcss";
 
 @theme {
-  --color-primary: #6d28d9;
-  --color-primary-dark: #4c1d95;
-  --color-secondary: #0ea5e9;
-  --color-surface: #0f172a;
-  --color-on-surface: #f1f5f9;
-  --color-on-surface-variant: #94a3b8;
-  --color-surface-container: #1e293b;
-  --color-surface-container-low: #1e293b;
-  --color-surface-container-lowest: #0f172a;
-  --color-surface-container-high: #334155;
-  --color-surface-container-highest: #475569;
-  --color-primary-container: #4c1d95;
-  --color-on-primary-container: #ddd6fe;
-  --color-tertiary: #10b981;
-  --color-tertiary-fixed-dim: #10b981;
-  --color-outline: #64748b;
-  
-  --font-sans: 'Inter', system-ui, sans-serif;
+  --color-outline: #747686;
+  --color-surface-dim: #d2d9f4;
+  --color-inverse-surface: #283044;
+  --color-tertiary: #2c2abc;
+  --color-on-background: #131b2e;
+  --color-surface-tint: #2151da;
+  --color-on-primary-container: #cad3ff;
+  --color-on-secondary-fixed-variant: #005137;
+  --color-surface-container-lowest: #ffffff;
+  --color-tertiary-fixed-dim: #c0c1ff;
+  --color-error-container: #ffdad6;
+  --color-background: #faf8ff;
+  --color-surface-container: #eaedff;
+  --color-secondary-fixed-dim: #68dba9;
+  --color-secondary-fixed: #85f8c4;
+  --color-on-surface: #131b2e;
+  --color-secondary: #006c4a;
+  --color-on-tertiary-container: #d1d1ff;
+  --color-on-secondary-container: #00714e;
+  --color-inverse-primary: #b7c4ff;
+  --color-on-primary-fixed-variant: #0039b5;
+  --color-surface-variant: #dae2fd;
+  --color-surface-container-highest: #dae2fd;
+  --color-on-error: #ffffff;
+  --color-on-secondary: #ffffff;
+  --color-on-tertiary: #ffffff;
+  --color-surface-container-high: #e2e7ff;
+  --color-primary-fixed: #dce1ff;
+  --color-primary-fixed-dim: #b7c4ff;
+  --color-surface-container-low: #f2f3ff;
+  --color-on-tertiary-fixed: #07006c;
+  --color-error: #ba1a1a;
+  --color-secondary-container: #82f5c1;
+  --color-primary-container: #1d4ed8;
+  --color-primary: #0037b0;
+  --color-on-error-container: #93000a;
+  --color-tertiary-container: #4648d4;
+  --color-on-primary: #ffffff;
+  --color-outline-variant: #c4c5d7;
+  --color-surface: #faf8ff;
+  --color-inverse-on-surface: #eef0ff;
+  --color-on-secondary-fixed: #002114;
+  --color-surface-bright: #faf8ff;
+  --color-tertiary-fixed: #e1e0ff;
+  --color-on-primary-fixed: #001551;
+  --color-on-surface-variant: #434655;
+  --color-on-tertiary-fixed-variant: #2f2ebe;
+
+  --font-body-md: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-display: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-body-lg: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-data-mono-lg: 'JetBrains Mono', monospace;
+  --font-body-sm: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-headline-sm: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-data-mono-sm: 'JetBrains Mono', monospace;
+  --font-label-md: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-title: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-data-mono-md: 'JetBrains Mono', monospace;
+  --font-label-sm: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-headline-md: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-headline-lg: 'Plus Jakarta Sans', system-ui, sans-serif;
+
+  --spacing-margin-mobile: 1rem;
+  --spacing-space-2: 0.5rem;
+  --spacing-space-10: 2.5rem;
+  --spacing-space-12: 3rem;
+  --spacing-margin-tablet: 1.5rem;
+  --spacing-space-5: 1.25rem;
+  --spacing-space-8: 2rem;
+  --spacing-gutter-mobile: 1rem;
+  --spacing-space-1: 0.25rem;
+  --spacing-space-16: 4rem;
+  --spacing-gutter-tablet: 1.5rem;
+  --spacing-space-6: 1.5rem;
+  --spacing-gutter-desktop: 1.5rem;
+  --spacing-margin-desktop: 2rem;
+  --spacing-space-4: 1rem;
+  --spacing-max-width-content: 88rem;
+  --spacing-space-3: 0.75rem;
 }
 
 @layer base {
-  body {
-    @apply bg-slate-900 text-slate-100 antialiased selection:bg-purple-500 selection:text-white;
-    font-family: 'Inter', system-ui, sans-serif;
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    background-color: #faf8ff;
+    color: #131b2e;
   }
 }
 
-/* Custom Scrollbar for a premium feel */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: #0f172a; 
-}
-::-webkit-scrollbar-thumb {
-  background: #334155; 
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #475569; 
+  display: none;
 }
 
-/* Animated gradient background */
-.bg-mesh {
-  background: radial-gradient(at 0% 0%, rgba(109, 40, 217, 0.15) 0px, transparent 50%),
-              radial-gradient(at 100% 0%, rgba(14, 165, 233, 0.15) 0px, transparent 50%),
-              radial-gradient(at 100% 100%, rgba(109, 40, 217, 0.15) 0px, transparent 50%),
-              radial-gradient(at 0% 100%, rgba(14, 165, 233, 0.15) 0px, transparent 50%);
-  background-color: #0f172a;
-}
+/* Custom font utilities to match Stitch classes */
+.font-display { font-size: 36px; line-height: 44px; letter-spacing: -0.025em; font-weight: 700; }
+.font-headline-lg { font-size: 30px; line-height: 38px; letter-spacing: -0.02em; font-weight: 700; }
+.font-headline-md { font-size: 22px; line-height: 28px; letter-spacing: -0.015em; font-weight: 600; }
+.font-headline-sm { font-size: 18px; line-height: 24px; letter-spacing: -0.01em; font-weight: 600; }
+.font-title { font-size: 15px; line-height: 20px; letter-spacing: -0.005em; font-weight: 600; }
+.font-body-lg { font-size: 16px; line-height: 24px; font-weight: 400; }
+.font-body-md { font-size: 14px; line-height: 20px; font-weight: 400; }
+.font-body-sm { font-size: 13px; line-height: 18px; font-weight: 400; }
+.font-label-md { font-size: 12px; line-height: 16px; letter-spacing: 0.02em; font-weight: 600; }
+.font-label-sm { font-size: 11px; line-height: 14px; letter-spacing: 0.04em; font-weight: 600; }
+.font-data-mono-lg { font-family: 'JetBrains Mono', monospace; font-size: 20px; line-height: 26px; font-weight: 600; }
+.font-data-mono-md { font-family: 'JetBrains Mono', monospace; font-size: 14px; line-height: 18px; font-weight: 500; }
+.font-data-mono-sm { font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 16px; font-weight: 500; }
 
-/* Stitch Fonts mappings */
-.font-headline-md { font-size: 1.5rem; line-height: 2rem; font-weight: 600; }
-.font-body-sm { font-size: 0.875rem; line-height: 1.25rem; }
-.font-label-caps { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
-.font-code-sm { font-family: monospace; font-size: 0.875rem; }
-.font-metric-xl { font-size: 2.25rem; font-weight: 700; }
-.font-title-lg { font-size: 1.25rem; font-weight: 600; }
-.font-label-sm { font-size: 0.75rem; font-weight: 500; }
-
-/* SVG Animations from Stitch */
 @keyframes dash {
   to { stroke-dashoffset: 0; }
 }

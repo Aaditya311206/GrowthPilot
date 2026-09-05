@@ -80,3 +80,65 @@ def test_select_best_interventions_budget_exhausted():
     assert picks[1]["customer_id"] == "c2"
     assert picks[1]["recommended_intervention"] == "no_offer"
     assert picks[1]["expected_incremental_profit"] == 0.0
+
+def test_select_best_interventions_budget_downgrade():
+    # c1 has a top choice of cashback_10 (cost 10, profit 50) and a second choice of discount_5 (cost 5, profit 25).
+    # Remaining budget is 7.0 (less than 10, but >= 5).
+    # Instead of dropping c1 to no_offer ($0 profit), the system should DOWNGRADE c1 to discount_5!
+    evals_by_cust = [
+        {
+            "customer_id": "c1", "predicted_uplift": 0.1,
+            "evaluations": [
+                {"intervention_id": "cashback_10", "intervention_name": "10% CB", "cost": 10.0, "expected_incremental_profit": 50.0},
+                {"intervention_id": "discount_5", "intervention_name": "5% D", "cost": 5.0, "expected_incremental_profit": 25.0},
+                {"intervention_id": "no_offer", "intervention_name": "No Intervention", "cost": 0.0, "expected_incremental_profit": 0.0}
+            ]
+        }
+    ]
+    picks = select_best_interventions(evals_by_cust, budget=7.0)
+    assert len(picks) == 1
+    assert picks[0]["customer_id"] == "c1"
+    assert picks[0]["recommended_intervention"] == "discount_5"
+    assert picks[0]["cost"] == 5.0
+    assert picks[0]["expected_incremental_profit"] == 25.0
+
+
+def test_evaluate_interventions_with_learned_treatment_models():
+    """
+    Test that evaluate_interventions consumes learned treatment_models & control_model
+    and predicts treatment-specific effects without arbitrary multipliers.
+    """
+    from unittest.mock import MagicMock
+    from app.services.optimization import evaluate_interventions
+    
+    class DummyModel:
+        def __init__(self, p_val):
+            self.p_val = p_val
+        def predict_proba(self, X):
+            import numpy as np
+            return np.array([[1.0 - self.p_val, self.p_val]])
+
+    ctrl_model = DummyModel(0.20)
+    # Discount has 0.40 conv (lift = +0.20), Cashback has 0.25 conv (lift = +0.05)
+    t_models = {
+        "5% Discount": DummyModel(0.40),
+        "10% Cashback": DummyModel(0.25),
+        "Free Shipping": DummyModel(0.22)
+    }
+    
+    feats = {"avg_order_value": 100.0, "total_orders": 2}
+    evals = evaluate_interventions(
+        customer_features=feats,
+        base_uplift=0.10,
+        margin_percentage=0.30,
+        merchant_aov=100.0,
+        use_percentage_cost=True,
+        treatment_models=t_models,
+        control_model=ctrl_model
+    )
+    
+    eval_dict = {e["intervention_id"]: e for e in evals}
+    # Discount revenue: +0.20 * 100 = 20, margin: 6, cost (5% of 100): 5 -> profit: 1.0
+    assert eval_dict["discount_5"]["expected_incremental_revenue"] == 20.0
+    assert eval_dict["discount_5"]["expected_incremental_profit"] == 1.0
+

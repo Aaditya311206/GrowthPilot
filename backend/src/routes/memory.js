@@ -5,7 +5,17 @@ const router = Router();
 
 router.get('/', async (req, res) => {
   try {
+    const merchantId = req.user.merchantId;
     const memory = await prisma.experimentMemory.findMany({
+      where: {
+        experiment: {
+          hypothesis: {
+            opportunity: {
+              merchantId: merchantId
+            }
+          }
+        }
+      },
       orderBy: { createdAt: 'desc' }
     });
     res.json(memory);

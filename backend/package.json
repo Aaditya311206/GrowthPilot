@@ -1,7 +1,8 @@
 {
   "type": "module",
   "scripts": {
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "test": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --runInBand --testTimeout=30000"
   },
   "dependencies": {
     "@prisma/client": "^5.21.0",

@@ -1,8 +1,23 @@
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Integer
+from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Integer, JSON
 from sqlalchemy.orm import relationship
 from .database import Base
 from datetime import datetime
 import uuid
+
+class Merchant(Base):
+    __tablename__ = "Merchant"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable=False)
+    contribution_margin_rate = Column(Float, nullable=False, default=0.35)
+
+class Guardrail(Base):
+    __tablename__ = "Guardrail"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    merchantId = Column(String, nullable=False)
+    ruleType = Column(String, nullable=False)
+    valueJson = Column(JSON, nullable=False)
 
 class Customer(Base):
     __tablename__ = "Customer"

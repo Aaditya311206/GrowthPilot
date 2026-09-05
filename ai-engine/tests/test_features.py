@@ -51,7 +51,8 @@ def test_extract_features_multiple_transactions():
     assert features["total_orders"] == 2.0
     assert features["total_spent"] == 300.0
     assert features["avg_order_value"] == 150.0
-    assert features["last_order_days_ago"] == 2.0
+    assert features["last_order_days_ago"] == pytest.approx(2.0, abs=0.01)
     assert features["pay_count_upi"] == 1.0
-    assert features["pay_count_card"] == 1.0
-    assert features["pay_count_wallet"] == 0.0
+    assert features["pay_count_credit_card"] == 1.0
+    assert features["pay_count_netbanking"] == 0.0
+

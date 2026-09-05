@@ -33,6 +33,11 @@ app.use('/api/memory', authenticate, memoryRoutes);
 app.use('/api/guardrails', authenticate, guardrailsRoutes);
 app.use('/api/agent', authenticate, agentRoutes);
 
-app.listen(port, () => {
-  console.log(`Backend server listening at http://localhost:${port}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(port, () => {
+    console.log(`Backend server listening at http://localhost:${port}`);
+  });
+}
+
+export default app;
+

@@ -23,17 +23,32 @@ CC_NORMAL_FAIL_RATE = 0.05
 CC_HIGH_VALUE_FAIL_RATE = 0.25 # The planted gateway timeout issue!
 
 # Constants for planted ground truth 2 (Causal Uplift)
-# Segment A (Students): Highly price sensitive, massive uplift from 10% Cashback
+# Segment A (Students): Highly price sensitive
 STUDENT_BASE_CONV = 0.15
-STUDENT_LIFT = 0.30
+STUDENT_LIFTS = {
+    '10% Cashback': 0.30,
+    '5% Discount': 0.15,
+    'Free Shipping': 0.10,
+    'None': 0.00
+}
 
-# Segment B (Professionals): Low price sensitivity, tiny uplift from 10% Cashback
+# Segment B (Professionals): Low price sensitivity
 PROF_BASE_CONV = 0.60
-PROF_LIFT = 0.02
+PROF_LIFTS = {
+    '10% Cashback': 0.02,
+    '5% Discount': 0.01,
+    'Free Shipping': 0.03,
+    'None': 0.00
+}
 
 # Segment C (Enterprise): No uplift, fixed budgets
 ENT_BASE_CONV = 0.85
-ENT_LIFT = 0.00
+ENT_LIFTS = {
+    '10% Cashback': 0.00,
+    '5% Discount': 0.00,
+    'Free Shipping': 0.01,
+    'None': 0.00
+}
 
 def generate_customers(num_customers):
     segments = ['Student', 'Professional', 'Enterprise']
@@ -63,24 +78,26 @@ def generate_customers(num_customers):
 def generate_experiments_history(customers_df):
     history = []
     
-    for _, row in customers_df.iterrows():
-        # 50/50 chance of being in Treatment (10% Cashback) or Control (None)
-        intervention = np.random.choice(['None', '10% Cashback'])
-        
+    interventions = ['None', '10% Cashback', '5% Discount', 'Free Shipping']
+    # 50% Control ('None'), 25% '10% Cashback', 15% '5% Discount', 10% 'Free Shipping'
+    # This guarantees P(T=1) == 0.50 for binary uplift (Intervention vs Control)
+    intervention_probs = [0.50, 0.25, 0.15, 0.10]
+    
+    assigned = np.random.choice(interventions, size=len(customers_df), p=intervention_probs)
+    
+    for idx, (_, row) in enumerate(customers_df.iterrows()):
+        intervention = assigned[idx]
         base_prob = row['baseline_purchase_prob']
         segment = row['segment']
         
-        if intervention == '10% Cashback':
-            if segment == 'Student':
-                final_prob = min(1.0, base_prob + STUDENT_LIFT)
-            elif segment == 'Professional':
-                final_prob = min(1.0, base_prob + PROF_LIFT)
-            else:
-                final_prob = min(1.0, base_prob + ENT_LIFT)
+        if segment == 'Student':
+            lift = STUDENT_LIFTS[intervention]
+        elif segment == 'Professional':
+            lift = PROF_LIFTS[intervention]
         else:
-            final_prob = base_prob
+            lift = ENT_LIFTS[intervention]
             
-        # Did they convert based on their final probability?
+        final_prob = min(1.0, max(0.0, base_prob + lift))
         converted = 1 if np.random.random() < final_prob else 0
         
         history.append({
@@ -178,10 +195,11 @@ def main():
     
     print("\nGeneration Complete! Data saved to 'ai-engine/data/'")
     print("\n--- GROUND TRUTH VERIFICATION ---")
-    print("1. Causal Uplift (Students vs 10% Cashback):")
-    student_lift = history_df[(history_df['segment'] == 'Student') & (history_df['intervention'] == '10% Cashback')]['converted'].mean() - \
-                   history_df[(history_df['segment'] == 'Student') & (history_df['intervention'] == 'None')]['converted'].mean()
-    print(f"   Student Lift: {student_lift:.2%} (Expected ~30%)")
+    print("1. Causal Uplift (Students across interventions):")
+    student_ctrl = history_df[(history_df['segment'] == 'Student') & (history_df['intervention'] == 'None')]['converted'].mean()
+    for t in ['10% Cashback', '5% Discount', 'Free Shipping']:
+        t_conv = history_df[(history_df['segment'] == 'Student') & (history_df['intervention'] == t)]['converted'].mean()
+        print(f"   Student Lift ({t}): {t_conv - student_ctrl:+.2%}")
     
     print("2. Payment Drop-off (Credit Cards > 5000):")
     merged = pd.merge(orders_df, payments_df, on='order_id')
@@ -191,3 +209,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

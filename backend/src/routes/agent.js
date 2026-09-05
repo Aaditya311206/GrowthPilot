@@ -11,7 +11,8 @@ router.post('/run', async (req, res) => {
     const response = await fetch('http://127.0.0.1:8000/agent/run', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Internal-Secret': process.env.AI_ENGINE_SECRET || 'growthpilot-internal-secret-2026'
       },
       body: JSON.stringify({
         merchant_id: req.user.merchantId,

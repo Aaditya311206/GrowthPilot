@@ -44,3 +44,52 @@ def calculate_significance(count_treat: int, count_ctrl: int, nobs_treat: int, n
         "ci_treat": ci_treat,
         "ci_ctrl": ci_ctrl
     }
+
+def calculate_lift_ci(count_treat: int, count_ctrl: int, nobs_treat: int, nobs_ctrl: int, alpha: float = 0.05) -> dict:
+    """
+    Compute two-sample risk difference (lift): Lift = P(Y=1|T) - P(Y=1|C)
+    along with standard error, Z-statistic, p-value, and two-sided (1 - alpha) confidence interval.
+    """
+    if nobs_treat <= 0 or nobs_ctrl <= 0:
+        return {
+            "lift": 0.0,
+            "se": 0.0,
+            "ci_lower": 0.0,
+            "ci_upper": 0.0,
+            "is_significant_positive": False,
+            "p_value": 1.0
+        }
+        
+    p_t = count_treat / nobs_treat
+    p_c = count_ctrl / nobs_ctrl
+    lift = p_t - p_c
+    
+    # Standard error of the difference in two independent proportions
+    se = np.sqrt((p_t * (1.0 - p_t) / nobs_treat) + (p_c * (1.0 - p_c) / nobs_ctrl))
+    
+    # Standard normal critical value (1.95996 for alpha = 0.05)
+    import scipy.stats as stats
+    z_crit = float(stats.norm.ppf(1.0 - alpha / 2.0))
+    
+    ci_lower = float(lift - z_crit * se)
+    ci_upper = float(lift + z_crit * se)
+    
+    # One-sided test that lift > 0
+    if se > 0:
+        z_stat = lift / se
+        p_value = float(1.0 - stats.norm.cdf(z_stat))
+    else:
+        z_stat = 0.0
+        p_value = 1.0 if lift <= 0 else 0.0
+        
+    is_significant_positive = bool(ci_lower > 0)
+    
+    return {
+        "lift": round(lift, 4),
+        "se": round(se, 4),
+        "ci_lower": round(ci_lower, 4),
+        "ci_upper": round(ci_upper, 4),
+        "is_significant_positive": is_significant_positive,
+        "p_value": round(p_value, 4)
+    }
+

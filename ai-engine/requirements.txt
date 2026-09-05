@@ -6,3 +6,8 @@ python-dotenv
 scipy
 scikit-learn
 pydantic
+sqlalchemy
+pydantic-settings
+pg8000
+pytest
+httpx

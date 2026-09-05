@@ -136,7 +136,7 @@ Added a mathematical optimization layer to calculate *Expected Incremental Contr
   $$\text{Discount Cost} = \text{AOV} \times \text{Discount Percentage}$$
   $$\text{Gross Margin} = \text{AOV} \times \text{Contribution Margin Rate}$$
   $$\text{Expected Incremental Profit} = \text{Gross Margin} \times \text{Predicted Uplift} - \text{Intervention Cost}$$
-- **Knapsack Budget Optimization**: Multi-option budget allocation ranks customer interventions by ROI/profitability and applies intelligent downgrades (e.g. falling back to 5% discount when 10% cashback exceeds remaining budget) rather than dropping customers completely.
+- **Greedy Profit-Ranked Budget Allocation**: Multi-option budget allocation ranks customer interventions by ROI/profitability and applies intelligent downgrades (e.g. falling back to 5% discount when 10% cashback exceeds remaining budget) rather than dropping customers completely.
 
 ---
 

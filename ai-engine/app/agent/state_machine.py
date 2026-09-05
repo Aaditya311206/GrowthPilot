@@ -290,6 +290,7 @@ class GrowthAgent:
         total_cost = sum(r["cost"] for r in recommendations)
         
         self.state_data["output"] = {
+            "total_profit": total_expected_profit,
             "total_expected_profit": total_expected_profit,
             "total_cost": total_cost,
             "recommendations": recommendations

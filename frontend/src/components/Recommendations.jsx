@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import api from '../api';
 
 export default function Recommendations({ agentResult, onSelectCustomer, onRunAnalysis, isRunning }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -172,7 +173,28 @@ export default function Recommendations({ agentResult, onSelectCustomer, onRunAn
                         <span className="material-symbols-outlined text-[14px]">check_circle</span> Validated (p&lt;0.05)
                       </span>
                     </td>
-                    <td className="py-space-3 px-space-4 text-right">
+                    <td className="py-space-3 px-space-4 text-right flex items-center justify-end gap-space-2">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const res = await api.post('/razorpay/create-payment-link', {
+                              customerId: item.customer_id,
+                              interventionId: item.recommended_intervention,
+                              amount: item.cost > 0 ? item.cost : 50.0,
+                              description: `GrowthPilot Incentive: ${item.intervention_name}`
+                            });
+                            const link = res.data?.payment_link?.short_url;
+                            if (link) {
+                              alert(`Razorpay Payment Link Created Successfully!\nURL: ${link}`);
+                            }
+                          } catch (e) {
+                            alert(`Failed to create Razorpay Payment Link: ${e.message}`);
+                          }
+                        }}
+                        className="px-space-3 py-1 rounded-lg bg-primary text-on-primary hover:bg-primary-container font-label-sm text-label-sm transition-colors"
+                      >
+                        Create Payment Link
+                      </button>
                       <button
                         onClick={() => onSelectCustomer(item.customer_id)}
                         className="px-space-3 py-1 rounded-lg bg-surface-container-high text-on-surface hover:bg-primary-container hover:text-on-primary font-label-sm text-label-sm transition-colors"

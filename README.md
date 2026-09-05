@@ -224,6 +224,27 @@ OUTPUT
   }
   ```
 
+### Create Razorpay Payment Link
+- **Method**: POST
+- **Route**: /api/razorpay/create-payment-link
+- **Purpose**: Creates an authentic Razorpay Payment Link for a recommended customer intervention.
+- **Authentication**: Bearer Token (JWT) required.
+- **Request Body**:
+  ```json
+  {
+    "customerId": "c-1002",
+    "interventionId": "cashback_10",
+    "amount": 10.0,
+    "description": "GrowthPilot Incentive: 10% Cashback"
+  }
+  ```
+
+### Razorpay Webhook Handler
+- **Method**: POST
+- **Route**: /api/razorpay/webhook
+- **Purpose**: Receives authentic Razorpay Webhook events (`payment_link.paid`, `payment.captured`) and updates merchant order history in PostgreSQL.
+- **Authentication**: `X-Razorpay-Signature` HMAC SHA-256 verification.
+
 ---
 
 ## 14. SETUP & TESTING
@@ -233,14 +254,14 @@ OUTPUT
 cd ai-engine
 pytest -v
 ```
-**Result**: 26 passed across feature extraction, schema parity, statistical lift CIs, optimization downgrades, and internal auth.
+**Result**: 28 passed across feature extraction, schema parity, statistical lift CIs, optimization downgrades, and internal auth.
 
 ### Backend Gateway Tests (Jest)
 ```bash
 cd backend
 npm test
 ```
-**Result**: 9 passed (7 multi-tenant isolation tests, 2 guardrail persistence tests).
+**Result**: 12 passed (7 multi-tenant isolation tests, 2 guardrail persistence tests, 3 Razorpay payment link & webhook tests).
 
 ### Prerequisites
 - Node.js (v22+)

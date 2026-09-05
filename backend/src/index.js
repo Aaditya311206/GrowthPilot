@@ -8,6 +8,7 @@ import experimentsRoutes from './routes/experiments.js';
 import memoryRoutes from './routes/memory.js';
 import guardrailsRoutes from './routes/guardrails.js';
 import agentRoutes from './routes/agent.js';
+import razorpayRoutes from './routes/razorpay.js';
 import { authenticate } from './middleware/auth.js';
 
 dotenv.config();
@@ -32,6 +33,7 @@ app.use('/api/experiments', authenticate, experimentsRoutes);
 app.use('/api/memory', authenticate, memoryRoutes);
 app.use('/api/guardrails', authenticate, guardrailsRoutes);
 app.use('/api/agent', authenticate, agentRoutes);
+app.use('/api/razorpay', authenticate, razorpayRoutes);
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(port, () => {

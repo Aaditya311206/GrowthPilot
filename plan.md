@@ -46,8 +46,8 @@ The product is deliberately narrow: it does one thing — evidence-based, profit
 - LLM used strictly for reasoning/explanation/hypothesis text, never for math.
 - Experiment memory that visibly influences the "next recommendation" text.
 
-### Stretch Goals (only if MVP is done early)
-- Real Razorpay test-mode payment link creation for the "experiment" arm.
+### Completed Extensions
+- **Real Razorpay Test-Mode Payment Links & Webhooks**: Integrated official `razorpay` SDK in Node.js backend (`/api/razorpay/create-payment-link` and `/api/razorpay/webhook`) with HMAC SHA-256 signature verification and DB audit trail.
 - Multiple concurrent experiments with portfolio-level guardrail budget tracking.
 - A second synthetic merchant profile to show generalization.
 - Basic sequential/interim-analysis stopping rule.

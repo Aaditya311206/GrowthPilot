@@ -2,16 +2,6 @@ import os
 import json
 from pydantic import BaseModel, Field
 
-def call_llm(prompt: str, response_model: type[BaseModel]) -> BaseModel:
-    from dotenv import load_dotenv
-    load_dotenv(os.path.join(os.path.dirname(__file__), '../../../backend/.env'))
-    mock_json = os.environ.get('MOCK_LLM_RESPONSE', '{}')
-    try:
-        data = json.loads(mock_json)
-        return response_model(**data)
-    except Exception as e:
-        raise RuntimeError(f"LLM failed to return valid schema: {e}")
-
 class DiscoveryOutput(BaseModel):
     target_segment: str = Field(description="The customer segment identified as an opportunity.")
     observed_problem: str = Field(description="Description of the issue or opportunity based ONLY on provided data.")
@@ -29,24 +19,41 @@ class ExplanationOutput(BaseModel):
     explanation: str = Field(description="Plain English explanation of the experiment results.")
 
 def discover_opportunities(observation_data: dict) -> DiscoveryOutput:
-    prompt = f"Analyze the following observation data: {json.dumps(observation_data)}. Identify the biggest opportunity. Do not invent numbers."
-    return call_llm(prompt, DiscoveryOutput)
+    tot_cust = observation_data.get("total_customers", 0)
+    rep_rate = observation_data.get("repeat_rate", 0.0)
+    aov = observation_data.get("merchant_aov", 0.0)
+    
+    return DiscoveryOutput(
+        target_segment="At-Risk & Low-Frequency Customers",
+        observed_problem=f"Repeat purchase rate is {rep_rate:.1%} across {tot_cust} total customers with average order value of INR {aov:.2f}.",
+        evidence=f"Total Customers: {tot_cust}, Repeat Rate: {rep_rate:.2%}, Merchant AOV: INR {aov:.2f}"
+    )
 
 def generate_hypothesis(discovery_data: dict) -> HypothesisOutput:
-    prompt = f"Given this discovery: {json.dumps(discovery_data)}, generate a business hypothesis. Do not invent numbers."
-    return call_llm(prompt, HypothesisOutput)
+    seg = discovery_data.get("target_segment", "Target Customers")
+    return HypothesisOutput(
+        proposed_intervention="Personalized Targeted Incentive Allocation (Discount / Cashback / Free Shipping)",
+        expected_behavioral_change=f"Increase purchase frequency and re-engagement among {seg}.",
+        expected_business_impact="Maximize net incremental contribution profit under strict merchant budget constraints."
+    )
 
 def explain_analysis(analysis_data: dict) -> ExplanationOutput:
-    prompt = f"Explain these statistical results: {json.dumps(analysis_data)}. Output the exact numerical values."
-    explanation = call_llm(prompt, ExplanationOutput)
+    actual_profit = float(analysis_data.get("profitability", {}).get("net_contribution_profit", 0.0))
+    actual_lift = float(analysis_data.get("absolute_lift", 0.0))
+    actual_p = float(analysis_data.get("statistics", {}).get("p_value", 1.0))
     
-    # STRICT NUMERIC VALIDATION
-    actual_profit = analysis_data["profitability"]["net_contribution_profit"]
-    actual_lift = analysis_data["absolute_lift"]
+    is_sig = analysis_data.get("statistics", {}).get("is_significant", False)
+    is_prof = analysis_data.get("profitability", {}).get("is_profitable", False)
     
-    if abs(explanation.incrementalProfit - actual_profit) > 0.01:
-        raise ValueError(f"LLM hallucinated incremental profit. Expected {actual_profit}, got {explanation.incrementalProfit}")
-    if abs(explanation.lift - actual_lift) > 0.01:
-        raise ValueError(f"LLM hallucinated lift. Expected {actual_lift}, got {explanation.lift}")
+    expl_text = (
+        f"Experiment yields an absolute lift of {actual_lift:.2%} (p-value: {actual_p:.4f}) and "
+        f"net incremental profit of INR {actual_profit:.2f}. "
+        f"Statistical significance: {is_sig}. Economic profitability: {is_prof}."
+    )
     
-    return explanation
+    return ExplanationOutput(
+        incrementalProfit=round(actual_profit, 2),
+        lift=round(actual_lift, 4),
+        pValue=round(actual_p, 4),
+        explanation=expl_text
+    )

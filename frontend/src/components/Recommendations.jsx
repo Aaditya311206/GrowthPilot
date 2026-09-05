@@ -7,7 +7,8 @@ export default function Recommendations({ agentResult, onSelectCustomer, onRunAn
   const [sortBy, setSortBy] = useState('profit'); // profit | uplift
 
   const rec = agentResult?.trace?.find(t => t.state === 'RECOMMEND')?.output || {};
-  const recommendations = rec.recommendations || [];
+  const out = agentResult?.trace?.find(t => t.state === 'OUTPUT')?.output || {};
+  const recommendations = rec.recommendations || rec.final_recommendations || out.recommendations || [];
 
   // Filter & sort
   const filtered = recommendations.filter(r => {

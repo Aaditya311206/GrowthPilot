@@ -60,8 +60,17 @@ class GrowthAgent:
             self.db.commit()
             return {"run_id": self.run_record.id, "status": "success", "trace": self.trace}
         except Exception as e:
-            self.run_record.finalState = f"FAILED: {str(e)}"
-            self.db.commit()
+            if hasattr(self.db, 'rollback') and callable(getattr(self.db, 'rollback')):
+                try:
+                    self.db.rollback()
+                except Exception:
+                    pass
+            try:
+                self.run_record.finalState = f"FAILED: {str(e)[:250]}"
+                if hasattr(self.db, 'commit') and callable(getattr(self.db, 'commit')):
+                    self.db.commit()
+            except Exception:
+                pass
             return {"run_id": self.run_record.id, "status": "failed", "error": str(e), "trace": self.trace}
 
     def _observe(self):
@@ -112,8 +121,8 @@ class GrowthAgent:
         
         from ..services.features import extract_features_batch
         
-        # Predict uplift for all eligible merchant customers to find targets
-        sample_ids = self.state_data["observation"]["sample_customer_ids"]
+        # Predict uplift for eligible merchant customers to find targets (max 200 for fast agent response)
+        sample_ids = self.state_data["observation"]["sample_customer_ids"][:200]
         if not sample_ids:
             self.state_data["prediction"] = {"customers": []}
             self._log_action(State.PREDICT, {"sample_size": 0}, {"customers_predicted": 0})
@@ -141,58 +150,81 @@ class GrowthAgent:
         self._log_action(State.PREDICT, {"sample_size": len(sample_ids)}, {"customers_predicted": len(predictions)})
 
     def _validate(self):
-        # Statistical Validation on predictions: evaluate confidence bounds and filter/downgrade non-positive or uncertain lift
+        # Statistical Validation: Check real DB experiment evidence for observed treatment/control conversion outcomes
         predictions = self.state_data["prediction"]["customers"]
+        sample_ids = [p["customer_id"] for p in predictions] if predictions else self.state_data.get("observation", {}).get("sample_customer_ids", [])
+        
+        # Query existing completed/analyzed experiments for this merchant with DB assignments & orders
+        assignments = (
+            self.db.query(ExperimentAssignment)
+            .filter(ExperimentAssignment.customerId.in_(sample_ids))
+            .all()
+        ) if sample_ids else []
+        
+        real_exp_data = None
+        if assignments:
+            treat_cids = [a.customerId for a in assignments if a.arm == "treatment"]
+            ctrl_cids = [a.customerId for a in assignments if a.arm == "control"]
+            
+            nobs_treat = len(treat_cids)
+            nobs_ctrl = len(ctrl_cids)
+            
+            if nobs_treat > 0 and nobs_ctrl > 0:
+                completed_statuses = {'completed', 'captured', 'success'}
+                treat_orders = self.db.query(Order).filter(Order.customerId.in_(treat_cids)).all()
+                ctrl_orders = self.db.query(Order).filter(Order.customerId.in_(ctrl_cids)).all()
+                
+                count_treat = len(set(o.customerId for o in treat_orders if o.status and o.status.strip().lower() in completed_statuses))
+                count_ctrl = len(set(o.customerId for o in ctrl_orders if o.status and o.status.strip().lower() in completed_statuses))
+                
+                ci_res = calculate_lift_ci(count_treat, count_ctrl, nobs_treat, nobs_ctrl, alpha=0.05)
+                real_exp_data = ci_res
+
         validated = []
-        
-        # Calculate empirical treatment vs control sample counts for confidence interval evaluation
-        # Default sample sizes from merchant historical experiment tracking or observation window
-        n_obs = len(predictions) if len(predictions) > 0 else 100
-        nobs_treat = max(int(n_obs * 0.5), 10)
-        nobs_ctrl = max(int(n_obs * 0.5), 10)
-        
         for p in predictions:
-            # Bound uplift score between -1.0 and 1.0
             uplift = max(min(p["predicted_uplift"], 1.0), -1.0)
             p["predicted_uplift"] = uplift
             
-            # Compute lift CI using sample sizes
-            # Implied conversion counts based on predicted lift over baseline
-            base_p = 0.30
-            treat_p = max(min(base_p + uplift, 1.0), 0.0)
-            count_treat = int(treat_p * nobs_treat)
-            count_ctrl = int(base_p * nobs_ctrl)
-            
-            ci_res = calculate_lift_ci(count_treat, count_ctrl, nobs_treat, nobs_ctrl, alpha=0.05)
-            p["stat_validation"] = ci_res
-            
-            # If CI upper bound <= 0 or lift is negative, reject
-            # If CI crosses zero (ci_lower <= 0 <= ci_upper) and is uncertain, downgrade/reject for positive-treatment
-            if uplift > 0 and ci_res["is_significant_positive"]:
-                p["is_persuadable"] = True
-                p["validation_status"] = "ACCEPTED"
-                validated.append(p)
-            elif uplift > 0 and ci_res["ci_lower"] <= 0:
-                p["is_persuadable"] = False
-                p["validation_status"] = "UNCERTAIN_CI_CROSSES_ZERO"
+            if real_exp_data:
+                p["stat_validation"] = real_exp_data
+                if uplift > 0 and real_exp_data["is_significant_positive"]:
+                    p["is_persuadable"] = True
+                    p["validation_status"] = "VALIDATED"
+                    validated.append(p)
+                elif uplift > 0 and real_exp_data["ci_lower"] <= 0:
+                    p["is_persuadable"] = False
+                    p["validation_status"] = "INSUFFICIENT_EVIDENCE"
+                else:
+                    p["is_persuadable"] = False
+                    p["validation_status"] = "REJECTED"
             else:
-                p["is_persuadable"] = False
-                p["validation_status"] = "REJECTED_NEGATIVE_EFFECT"
-                
-        # If no positive statistically significant uplift found, keep non-negative bounded predictions for evaluation
-        if not validated:
-            validated = [p for p in predictions if p.get("validation_status") != "REJECTED_NEGATIVE_EFFECT"]
-            if not validated:
-                validated = predictions
-            
+                # No real experimental DB evidence exists yet for this merchant
+                p["stat_validation"] = {
+                    "ci_lower": None,
+                    "ci_upper": None,
+                    "is_significant_positive": False,
+                    "reason": "No historical A/B experiment assignments found in DB."
+                }
+                if uplift > 0:
+                    p["is_persuadable"] = True
+                    p["validation_status"] = "INSUFFICIENT_EVIDENCE"
+                    validated.append(p)
+                else:
+                    p["is_persuadable"] = False
+                    p["validation_status"] = "REJECTED"
+
         self.state_data["validation"] = {
             "total_evaluated": len(predictions),
             "validated_customers": len(validated),
+            "has_real_experiment_evidence": real_exp_data is not None,
             "persuadable_count": sum(1 for p in predictions if p.get("is_persuadable", False)),
-            "rejected_uncertain": sum(1 for p in predictions if p.get("validation_status") == "UNCERTAIN_CI_CROSSES_ZERO"),
-            "rejected_negative": sum(1 for p in predictions if p.get("validation_status") == "REJECTED_NEGATIVE_EFFECT")
+            "status_breakdown": {
+                "VALIDATED": sum(1 for p in predictions if p.get("validation_status") == "VALIDATED"),
+                "INSUFFICIENT_EVIDENCE": sum(1 for p in predictions if p.get("validation_status") == "INSUFFICIENT_EVIDENCE"),
+                "REJECTED": sum(1 for p in predictions if p.get("validation_status") == "REJECTED")
+            }
         }
-        self.state_data["prediction"]["customers"] = validated
+        self.state_data["prediction"]["customers"] = validated if validated else predictions
         self._log_action(State.VALIDATE, {"customers_predicted": len(predictions)}, self.state_data["validation"])
 
     def _optimize(self):
@@ -224,15 +256,15 @@ class GrowthAgent:
         from ..services.optimization import select_best_interventions
         
         evaluations = self.state_data["optimization"]["evaluations_by_customer"]
-        # Use goal logic to parse budget if needed, but for now assume 100 or None
-        # We will parse budget from self.goal if it contains 'budget:' for demonstration
         budget = None
         if "budget:" in self.goal.lower():
             try:
                 budget_str = self.goal.lower().split("budget:")[1].strip().split()[0]
                 budget = float(budget_str)
-            except:
-                budget = None
+                if budget < 0:
+                    raise ValueError("Budget cannot be negative.")
+            except Exception as e:
+                raise ValueError(f"Malformed budget supplied in goal parameter: '{self.goal}'. Details: {e}")
                 
         final_recommendations = select_best_interventions(evaluations, budget)
         
@@ -241,7 +273,15 @@ class GrowthAgent:
             "final_recommendations": final_recommendations
         }
         
-        self._log_action(State.RECOMMEND, {"budget": budget}, {"recommendations_count": len(final_recommendations)})
+        self._log_action(
+            State.RECOMMEND, 
+            {"budget": budget}, 
+            {
+                "recommendations_count": len(final_recommendations),
+                "budget_applied": budget,
+                "recommendations": final_recommendations
+            }
+        )
 
     def _output(self):
         recommendations = self.state_data["recommendation"]["final_recommendations"]
@@ -254,4 +294,12 @@ class GrowthAgent:
             "total_cost": total_cost,
             "recommendations": recommendations
         }
-        self._log_action(State.OUTPUT, self.state_data["recommendation"], {"total_profit": total_expected_profit})
+        self._log_action(
+            State.OUTPUT, 
+            self.state_data["recommendation"], 
+            {
+                "total_profit": total_expected_profit,
+                "total_cost": total_cost,
+                "recommendations": recommendations
+            }
+        )

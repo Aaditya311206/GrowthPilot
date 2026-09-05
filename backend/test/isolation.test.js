@@ -167,4 +167,17 @@ describe('Multi-Tenant Isolation Tests', () => {
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(experimentB.id);
   });
+
+  test('Merchant A GET /api/dashboard/summary is strictly merchant-scoped and DB-backed', async () => {
+    const res = await request(app)
+      .get('/api/dashboard/summary')
+      .set('Authorization', `Bearer ${tokenA}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('gmv');
+    expect(res.body).toHaveProperty('orders');
+    expect(res.body).toHaveProperty('repeatRate');
+    expect(res.body).toHaveProperty('activeExperiments');
+    expect(res.body).toHaveProperty('aiFoundOpportunities');
+  });
 });

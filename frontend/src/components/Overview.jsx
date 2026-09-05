@@ -9,11 +9,13 @@ export default function Overview({ agentResult, onRunAnalysis, isRunning, onNavi
   const rec = agentResult?.trace?.find(t => t.state === 'RECOMMEND')?.output || {};
   const out = agentResult?.trace?.find(t => t.state === 'OUTPUT')?.output || {};
 
+  const recommendations = rec.recommendations || rec.final_recommendations || out.recommendations || [];
+
   const totalCustomers = obs.total_customers || null;
   const persuadableCount = val.persuadable_count || null;
-  const totalProfit = out.total_profit != null ? `₹${Number(out.total_profit).toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : null;
+  const totalProfit = out.total_profit != null ? `₹${Number(out.total_profit).toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : (out.total_expected_profit != null ? `₹${Number(out.total_expected_profit).toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : null);
   const totalCost = out.total_cost != null ? `₹${Number(out.total_cost).toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : null;
-  const activeOffers = rec.recommendations ? rec.recommendations.filter(r => r.recommended_intervention !== 'no_offer').length : null;
+  const activeOffers = recommendations.length > 0 ? recommendations.filter(r => r.recommended_intervention !== 'no_offer').length : null;
 
   return (
     <div className="flex flex-col w-full">
@@ -118,9 +120,9 @@ export default function Overview({ agentResult, onRunAnalysis, isRunning, onNavi
           <div>
             <span className="font-label-sm text-label-sm uppercase text-outline tracking-wider">Avg Predicted Uplift</span>
             <div className="mt-space-2 font-data-mono-lg text-data-mono-lg text-on-surface">
-              {rec.recommendations && rec.recommendations.length > 0
+              {recommendations.length > 0
                 ? `+${(
-                    (rec.recommendations.reduce((acc, r) => acc + (r.predicted_uplift || 0), 0) / rec.recommendations.length) *
+                    (recommendations.reduce((acc, r) => acc + (r.predicted_uplift || 0), 0) / recommendations.length) *
                     100
                   ).toFixed(1)}%`
                 : '—'}

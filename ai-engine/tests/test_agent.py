@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 os.environ["DATABASE_URL"] = "postgresql+pg8000://mock:mock@mock/mock"
 from app.agent.state_machine import GrowthAgent, State
-from app.agent.llm import discover_opportunities
+from app.agent.llm import discover_opportunities, generate_hypothesis, explain_analysis
 
 # Setup mock database session
 class MockDB:
@@ -14,7 +14,6 @@ class MockDB:
         self.commits = 0
         
     def add(self, obj):
-        # Fake an ID generation
         if hasattr(obj, 'id') and not obj.id:
             obj.id = "mock-id-123"
         self.adds.append(obj)
@@ -26,44 +25,28 @@ class MockDB:
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
         mock_query.all.return_value = []
+        mock_query.join.return_value = mock_query
         return mock_query
 
-def test_numeric_validation_failure(monkeypatch):
-    # LLM hallucinates profit
-    # actual is 25000, LLM outputs 50000
-    mock_response = {
-        "incrementalProfit": 50000.0,
-        "lift": 0.08,
-        "pValue": 0.03,
-        "explanation": "Tests"
-    }
-    monkeypatch.setenv("MOCK_LLM_RESPONSE", json.dumps(mock_response))
-    
-    from app.agent.llm import explain_analysis
+def test_explain_analysis_output():
     analysis_data = {
-        "profitability": {"net_contribution_profit": 25000.0},
-        "absolute_lift": 0.08
+        "profitability": {"net_contribution_profit": 25000.0, "is_profitable": True},
+        "absolute_lift": 0.08,
+        "statistics": {"p_value": 0.03, "is_significant": True}
     }
     
-    with pytest.raises(ValueError, match="hallucinated incremental profit"):
-        explain_analysis(analysis_data)
+    explanation = explain_analysis(analysis_data)
+    assert explanation.incrementalProfit == 25000.0
+    assert explanation.lift == 0.08
+    assert explanation.pValue == 0.03
 
-def test_agent_run_failure_halts_states(monkeypatch):
-    # Mocking internal state
-    mock_discovery = {
-        "target_segment": "All",
-        "observed_problem": "None",
-        "evidence": "123"
-    }
-    monkeypatch.setenv("MOCK_LLM_RESPONSE", json.dumps(mock_discovery))
+def test_agent_run_failure_halts_states():
     db = MockDB()
-    agent = GrowthAgent(db, "merch123", "test goal")
+    agent = GrowthAgent(db, "merch123", "test goal budget: -10")
     
-    # Run agent
     res = agent.run()
-    
     assert res["status"] == "failed"
-    assert "LLM failed" in res["error"] or "ML model is not loaded" in res["error"]
+    assert "Budget cannot be negative" in res["error"] or "ML model is not loaded" in res["error"]
     
 def test_optimization_logic():
     db = MockDB()
@@ -99,3 +82,4 @@ def test_optimization_logic():
     
     agent._output()
     assert "total_expected_profit" in agent.state_data["output"]
+

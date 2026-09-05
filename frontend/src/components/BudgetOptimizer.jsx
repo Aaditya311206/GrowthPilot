@@ -5,7 +5,7 @@ export default function BudgetOptimizer({ agentResult, onRunAnalysis, isRunning 
 
   const rec = agentResult?.trace?.find(t => t.state === 'RECOMMEND')?.output || {};
   const out = agentResult?.trace?.find(t => t.state === 'OUTPUT')?.output || {};
-  const recs = rec.recommendations || [];
+  const recs = rec.recommendations || rec.final_recommendations || out.recommendations || [];
 
   const totalSpent = out.total_cost != null ? out.total_cost : 200.0;
   const totalProfit = out.total_profit != null ? out.total_profit : 24877.23;

@@ -23,24 +23,28 @@ export default function Dashboard({ onLogout }) {
         goal: `Increase repeat customer behavior. budget: ${customBudget}`
       };
       const res = await api.post('/agent/run', payload);
-      const runId = res.data.run_id;
-
-      if (!runId) throw new Error("Agent run failed to return a valid ID");
-
-      const activityRes = await api.get('/agent/activity');
-      const runs = Array.isArray(activityRes.data)
-        ? activityRes.data
-        : (activityRes.data?.runs || []);
-      const latestRun = runs.find(r => r.id === runId) || runs[0];
-
-      if (latestRun) {
-        setAgentResult(latestRun);
-      } else {
+      
+      if (res.data && res.data.trace && res.data.trace.length > 0) {
         setAgentResult({
-          id: runId,
-          status: res.data?.status || 'COMPLETED',
-          trace: res.data?.trace || []
+          id: res.data.run_id,
+          status: res.data.status,
+          trace: res.data.trace
         });
+      } else {
+        const activityRes = await api.get('/agent/activity');
+        const runs = Array.isArray(activityRes.data) ? activityRes.data : [];
+        const completedRun = runs.find(r => r.actions && r.actions.length >= 7) || runs[0];
+        if (completedRun && completedRun.actions && completedRun.actions.length > 0) {
+          const formattedTrace = completedRun.actions.map(a => ({
+            state: a.state,
+            output: a.outputJson
+          }));
+          setAgentResult({
+            id: completedRun.id,
+            status: completedRun.finalState || 'COMPLETED',
+            trace: formattedTrace
+          });
+        }
       }
     } catch (err) {
       console.error('Agent Execution Error:', err);
@@ -49,11 +53,39 @@ export default function Dashboard({ onLogout }) {
     }
   };
 
-  // Run initial analysis automatically if no result is present
+  // Fetch existing completed run from DB or run once on mount
   useEffect(() => {
-    if (!agentResult && !isRunning) {
-      runAgentAnalysis('200');
-    }
+    let isMounted = true;
+    const initData = async () => {
+      try {
+        const activityRes = await api.get('/agent/activity');
+        const runs = Array.isArray(activityRes.data) ? activityRes.data : [];
+        const completedRun = runs.find(r => 
+          r.actions && 
+          r.actions.some(a => (a.state === 'RECOMMEND' || a.state === 'OUTPUT') && a.outputJson && a.outputJson.recommendations && a.outputJson.recommendations.length > 0)
+        ) || runs.find(r => r.actions && r.actions.length >= 7) || runs[0];
+
+        if (completedRun && completedRun.actions && completedRun.actions.length > 0) {
+          const formattedTrace = completedRun.actions.map(a => ({
+            state: a.state,
+            output: a.outputJson
+          }));
+          if (isMounted) {
+            setAgentResult({
+              id: completedRun.id,
+              status: completedRun.finalState || 'COMPLETED',
+              trace: formattedTrace
+            });
+          }
+        } else {
+          if (isMounted) runAgentAnalysis('200');
+        }
+      } catch (err) {
+        if (isMounted) runAgentAnalysis('200');
+      }
+    };
+    initData();
+    return () => { isMounted = false; };
   }, []);
 
   const handleNavigate = (path) => {

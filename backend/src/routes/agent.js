@@ -33,7 +33,7 @@ router.get('/activity', async (req, res) => {
       where: { merchantId: req.user.merchantId },
       include: {
         actions: {
-          orderBy: { timestamp: 'desc' }
+          orderBy: { timestamp: 'asc' }
         }
       },
       orderBy: { startedAt: 'desc' },

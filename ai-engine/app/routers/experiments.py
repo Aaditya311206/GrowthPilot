@@ -58,9 +58,14 @@ def evaluate_experiment(experiment_id: str, req: EvaluateRequest, db: Session = 
     if nobs_treat == 0 or nobs_ctrl == 0:
         raise HTTPException(status_code=400, detail="Both treatment and control groups must have assigned users.")
 
-    # 3. Query related orders
-    treat_orders = db.query(Order).filter(Order.customerId.in_(treat_customers)).all()
-    ctrl_orders = db.query(Order).filter(Order.customerId.in_(ctrl_customers)).all()
+    # 3. Query related orders with canonical valid completed statuses
+    completed_statuses = {'completed', 'captured', 'success'}
+    
+    treat_orders_raw = db.query(Order).filter(Order.customerId.in_(treat_customers)).all()
+    ctrl_orders_raw = db.query(Order).filter(Order.customerId.in_(ctrl_customers)).all()
+    
+    treat_orders = [o for o in treat_orders_raw if o.status and o.status.strip().lower() in completed_statuses]
+    ctrl_orders = [o for o in ctrl_orders_raw if o.status and o.status.strip().lower() in completed_statuses]
 
     # Conversions (number of distinct customers who bought)
     treat_conv = len(set([o.customerId for o in treat_orders]))
